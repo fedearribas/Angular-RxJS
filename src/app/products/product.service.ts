@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 
-import { BehaviorSubject, catchError, combineLatest, map, merge, Observable, scan, shareReplay, Subject, tap, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, combineLatest, filter, forkJoin, map, merge, Observable, of, scan, shareReplay, Subject, switchMap, tap, throwError } from 'rxjs';
 
 import { Product } from './product';
 import { ProductCategoryService } from '../product-categories/product-category.service';
+import { SupplierService } from '../suppliers/supplier.service';
+import { Supplier } from '../suppliers/supplier';
 
 @Injectable({
   providedIn: 'root'
@@ -50,6 +52,19 @@ export class ProductService {
       tap(data => console.log('selected product:', JSON.stringify(data)))
     );
 
+  selectedProductSuppliers$ = this.selectedProduct$
+  .pipe(
+    filter(product => Boolean(product)),
+    switchMap(selectedProduct => {
+      if (selectedProduct?.supplierIds)
+        return forkJoin(selectedProduct.supplierIds
+          .map(id => this.http.get<Supplier>(`${this.suppliersUrl}/${id}`)));
+      else
+        return of([]);
+    }),
+    tap(data => console.log('Product suppliers:', JSON.stringify(data)))
+  );
+
   private productInsertedSubject = new Subject<Product>();
   productInsertedAction$ = this.productInsertedSubject.asObservable();
 
@@ -62,7 +77,9 @@ export class ProductService {
         (value instanceof Array) ? [...value] : [...acc, value], [] as Product[])
     );
 
-  constructor(private http: HttpClient, private productCategoryService: ProductCategoryService) { }
+  constructor(private http: HttpClient,
+    private productCategoryService: ProductCategoryService,
+    private supplierService: SupplierService) { }
 
   changeSelectedProductId(id: number) {
     this.productSelectedSubject.next(id);
